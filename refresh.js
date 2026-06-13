@@ -1,66 +1,98 @@
 #!/usr/bin/env node
-/**
- * Notion-Daten neu laden und data.json aktualisieren.
- * Danach: git add data.json && git commit -m "data: refresh" && git push
- *
- * Voraussetzung: claude CLI muss installiert und mit Notion MCP verbunden sein.
- */
-
-const { execSync } = require('child_process');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
+const TOKEN = process.env.NOTION_TOKEN;
+const DB_ID = 'e131a55b-0bdf-437f-8f17-7ef748eb8416';
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-const prompt = [
-  'Use the notion MCP tool notion-query-database-view to query',
-  'view_url "view://37eeee07-459d-8101-ae04-000cfb7f70a7" with page_size 100.',
-  'Output ONLY a valid JSON object with two fields:',
-  '"lastUpdated": current ISO timestamp,',
-  '"rows": array of objects with keys:',
-  'person (string), datum (ISO date), waehlersuche (number),',
-  'gf (number), pitch (number), terminiert (number),',
-  'quali (number), sales (number), noshows (number),',
-  'abschluesse (number), umsatz (number).',
-  'Replace null/undefined with 0. Output ONLY the JSON, nothing else.'
-].join(' ');
-
-console.log('Lade Notion-Daten via Claude CLI…');
-
-let stdout;
-try {
-  stdout = execSync(
-    `claude -p "${prompt.replace(/"/g, '\\"')}" --output-format text`,
-    { timeout: 90000, encoding: 'utf8' }
-  );
-} catch (e) {
-  console.error('claude CLI Fehler:', e.message);
-  process.exit(1);
+function notionQuery(cursor) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({
+      page_size: 100,
+      ...(cursor ? { start_cursor: cursor } : {})
+    });
+    const options = {
+      hostname: 'api.notion.com',
+      path: `/v1/databases/${DB_ID}/query`,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
 }
 
-const jsonMatch = stdout.match(/\{[\s\S]*\}/);
-if (!jsonMatch) {
-  console.error('Kein JSON in der Ausgabe gefunden:\n', stdout.slice(0, 500));
-  process.exit(1);
+function num(props, key) {
+  return props[key]?.number ?? 0;
 }
 
-let data;
-try {
-  data = JSON.parse(jsonMatch[0]);
-} catch (e) {
-  console.error('JSON Parse-Fehler:', e.message);
-  process.exit(1);
+async function main() {
+  if (!TOKEN) {
+    console.error('Fehler: NOTION_TOKEN nicht gesetzt.');
+    console.error('Lokal: NOTION_TOKEN=ntn_... node refresh.js');
+    process.exit(1);
+  }
+
+  console.log('Lade Notion-Daten...');
+  let allResults = [];
+  let cursor = null;
+  let hasMore = true;
+
+  while (hasMore) {
+    const data = await notionQuery(cursor);
+    if (data.object === 'error') {
+      console.error('Notion API Fehler:', data.message);
+      process.exit(1);
+    }
+    allResults.push(...data.results);
+    hasMore = data.has_more;
+    cursor = data.next_cursor;
+  }
+
+  const rows = allResults
+    .filter(p => !p.in_trash && !p.is_archived)
+    .map(p => {
+      const props = p.properties;
+      return {
+        person: props['Person']?.select?.name ?? '',
+        datum: props['Datum']?.date?.start ?? '',
+        waehlersuche: num(props, 'Wählversuche'),
+        gf: num(props, 'GF gesprochen'),
+        pitch: num(props, 'Pitch'),
+        terminiert: num(props, 'Terminiert'),
+        quali: num(props, 'Quali Calls'),
+        sales: num(props, 'Sales Calls'),
+        noshows: num(props, 'No Shows'),
+        abschluesse: num(props, 'Abschlüsse'),
+        umsatz: num(props, 'Umsatz')
+      };
+    })
+    .filter(r => r.person && r.datum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+
+  const output = {
+    lastUpdated: new Date().toISOString(),
+    rows
+  };
+
+  fs.writeFileSync(DATA_FILE, JSON.stringify(output, null, 2));
+  console.log(`✓ data.json aktualisiert: ${rows.length} Einträge (${output.lastUpdated})`);
 }
 
-if (!Array.isArray(data.rows) || data.rows.length === 0) {
-  console.error('rows fehlt oder leer — Abbruch.');
-  process.exit(1);
-}
-
-fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-console.log(`✓ data.json aktualisiert: ${data.rows.length} Einträge (${data.lastUpdated})`);
-console.log('');
-console.log('Jetzt pushen:');
-console.log('  git add data.json');
-console.log('  git commit -m "data: refresh $(date +%Y-%m-%d)"');
-console.log('  git push');
+main().catch(e => { console.error(e); process.exit(1); });
