@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-15T20:23:36.397Z",
+  "lastUpdated": "2026-06-16T20:11:53.337Z",
   "rows": [
     {
       "person": "Erik",
@@ -362,6 +362,19 @@
       "quali": 0,
       "sales": 0,
       "noshows": 0,
+      "abschluesse": 0,
+      "umsatz": 0
+    },
+    {
+      "person": "Erik",
+      "datum": "2026-06-16",
+      "waehlersuche": 8,
+      "gf": 1,
+      "pitch": 0,
+      "terminiert": 0,
+      "quali": 0,
+      "sales": 1,
+      "noshows": 1,
       "abschluesse": 0,
       "umsatz": 0
     }
