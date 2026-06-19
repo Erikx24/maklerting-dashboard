@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-06-18T19:25:58.717Z",
+  "lastUpdated": "2026-06-19T18:52:21.265Z",
   "rows": [
     {
       "person": "Erik",
@@ -403,6 +403,32 @@
       "noshows": 0,
       "abschluesse": 0,
       "umsatz": 1600
+    },
+    {
+      "person": "Erik",
+      "datum": "2026-06-19",
+      "waehlersuche": 33,
+      "gf": 7,
+      "pitch": 5,
+      "terminiert": 1,
+      "quali": 0,
+      "sales": 0,
+      "noshows": 0,
+      "abschluesse": 0,
+      "umsatz": 0
+    },
+    {
+      "person": "Soufian",
+      "datum": "2026-06-19",
+      "waehlersuche": 31,
+      "gf": 5,
+      "pitch": 4,
+      "terminiert": 0,
+      "quali": 0,
+      "sales": 0,
+      "noshows": 0,
+      "abschluesse": 0,
+      "umsatz": 0
     }
   ]
 }
